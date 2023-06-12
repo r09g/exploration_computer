@@ -102,19 +102,43 @@
 #if EN_DISP_MOD
   
   /*
-    clear and draw background color, reset priority to 0
+    set priority
   */
-  void clear(uint16_t* fb, uint16_t color = 0) {
-    for(int i = 0; i < DISP_PIX; i++) {
-      fb[i] = color;
-      zbuf[i] = 0;  // reset priority
+  void set_priority(Point ll, Point ur, uint8_t priority) {
+    int xlow = (ll.x >= 0) ? ll.x : 0;
+    int ylow = (ll.y >= 0) ? ll.y : 0;
+    int xhigh = (ur.x < DISP_LX) ? ur.x : DISP_LX - 1;
+    int yhigh = (ur.y < DISP_LY) ? ur.y : DISP_LY - 1;
+    for(int x = xlow; x <= xhigh; x++) {
+      for(int y = ylow; y <= yhigh; y++) {
+        zbuf[x + DISP_LX*y] = priority;
+      }
     }
   }
 
   /*
-    draw a point, default red color
+    clear and draw background color, reset priority to 0 for pixels with priority >= the limit
   */
-  void draw_point(uint16_t* fb, uint8_t* zbuf, Point pt1, uint16_t color=0xF800, uint8_t priority=2) {
+  void clear(Point ll={0, 0}, Point ur={DISP_LX - 1, DISP_LY - 1}, uint16_t color=0, uint8_t priority_limit=0) {
+    int xlow = (ll.x >= 0) ? ll.x : 0;
+    int ylow = (ll.y >= 0) ? ll.y : 0;
+    int xhigh = (ur.x < DISP_LX) ? ur.x : DISP_LX - 1;
+    int yhigh = (ur.y < DISP_LY) ? ur.y : DISP_LY - 1;
+    for(int x = xlow; x <= xhigh; x++) {
+      for(int y = ylow; y <= yhigh; y++) {
+        int pix = x + DISP_LX*y;
+        if(zbuf[pix] >= priority_limit) {
+          fb[pix] = color;
+          zbuf[pix] = 0;
+        }
+      }
+    }
+  }
+
+  /*
+    draw a point with customizable size, default red color
+  */
+  void draw_point(Point pt1, int size=2, uint16_t color=0xF800, uint8_t priority=3) {
     int xlow = (pt1.x > 0) ? pt1.x - 1 : 0;
     int xhigh = (pt1.x < DISP_LX - 1) ? pt1.x + 1 : DISP_LX - 1;
     int ylow = (pt1.y > 0) ? pt1.y - 1 : 0;
@@ -122,7 +146,7 @@
     for(int x = xlow; x <= xhigh; x++) {
       for(int y = ylow; y <= yhigh; y++) {
         int pix = x + DISP_LX*y;
-        if(priority > zbuf[pix]) {
+        if(priority >= zbuf[pix]) {
           fb[pix] = color;
           zbuf[pix] = priority;
         }
@@ -133,7 +157,7 @@
   /*
     draw line between 2 points, uses Bresenham's line algorithm
   */
-  void draw_line(uint16_t* fb, uint8_t* zbuf, Point pt1, Point pt2, uint16_t color=65535, uint8_t priority=1) {
+  void draw_line(Point pt1, Point pt2, uint16_t color=65535, uint8_t priority=2) {
     int x0 = pt1.x;
     int x1 = pt2.x;
     int y0 = pt1.y;
@@ -148,7 +172,7 @@
     int e2;
     while(1) {
       int pix = x0 + DISP_LX*y0;
-      if(priority > zbuf[pix]) {
+      if(priority >= zbuf[pix]) {
         fb[pix] = color;
         zbuf[pix] = priority;
       }
@@ -173,6 +197,41 @@
     }
   }
 
+  /*
+    fill area with color
+  */
+  void draw_fill(Point ll, Point ur, uint16_t color=0, uint8_t priority=1) {
+    int xlow = (ll.x >= 0) ? ll.x : 0;
+    int ylow = (ll.y >= 0) ? ll.y : 0;
+    int xhigh = (ur.x < DISP_LX) ? ur.x : DISP_LX - 1;
+    int yhigh = (ur.y < DISP_LY) ? ur.y : DISP_LY - 1;
+    for(int x = xlow; x <= xhigh; x++) {
+      for(int y = ylow; y <= yhigh; y++) {
+        int pix = x + DISP_LX*y;
+        if(priority >= zbuf[pix]) {
+          fb[pix] = color;
+          zbuf[pix] = priority;
+        }
+      }
+    }
+  }
+
+  /*
+    draw a box
+  */
+  void draw_box(Point ll, Point ur, bool fill=false, uint16_t color=65535, uint8_t priority=4) {
+    int xlow = (ll.x >= 0) ? ll.x : 0;
+    int ylow = (ll.y >= 0) ? ll.y : 0;
+    int xhigh = (ur.x < DISP_LX) ? ur.x : DISP_LX - 1;
+    int yhigh = (ur.y < DISP_LY) ? ur.y : DISP_LY - 1;
+    if(fill) {
+      draw_fill(ll, ur, color, 1);
+    }
+    draw_line((Point){xlow, ylow}, (Point){xlow, yhigh}, color, priority);
+    draw_line((Point){xlow, ylow}, (Point){xhigh, ylow}, color, priority);
+    draw_line((Point){xhigh, ylow}, (Point){xhigh, yhigh}, color, priority);
+    draw_line((Point){xlow, yhigh}, (Point){xhigh, yhigh}, color, priority);
+  }
 
 #endif
 
@@ -186,23 +245,45 @@
   /*
     test to draw lines on the display
   */
-  void line_test(uint16_t* fb, int num_lines = 1) {
+  void line_test(int num_lines = 1) {
     for(int i = 0; i < num_lines; i++) {
-      draw_line(fb, zbuf, (Point){(int)random(DISP_LX), (int)random(DISP_LY)}, (Point){(int)random(DISP_LX), (int)random(DISP_LY)});
+      draw_line((Point){(int)random(DISP_LX), (int)random(DISP_LY)}, (Point){(int)random(DISP_LX), (int)random(DISP_LY)});
     }
   }
 
   /*
     test to draw lines and points on the display
   */
-  void line_point_test(uint16_t* fb, int num_lines = 1) {
+  void line_point_test(int num_lines = 1) {
     for(int i = 0; i < num_lines; i++) {
       Point pt1 = {(int)random(DISP_LX), (int)random(DISP_LY)};
       Point pt2 = {(int)random(DISP_LX), (int)random(DISP_LY)};
-      draw_line(fb, zbuf, pt1, pt2);
-      draw_point(fb, zbuf, pt1);
-      draw_point(fb, zbuf, pt2);
+      draw_line(pt1, pt2);
+      draw_point(pt1);
+      draw_point(pt2);
     }
+  }
+
+  /*
+    test to draw a rectangle
+  */
+  void box_test() {
+    draw_box((Point){0,0},(Point){DISP_LX-1,DISP_LX-1});
+  }
+
+  /*
+    test to fill a rectangle
+  */
+  void fill_test() {
+    draw_box((Point){0,0},(Point){DISP_LX-1,DISP_LX-1},true);
+  }
+
+  /*
+    test to draw basic ui background
+  */
+  void ui_test_01() {
+    draw_box((Point){0,0},(Point){DISP_LX-1,DISP_LX-1});
+    draw_fill((Point){0,DISP_LX},(Point){DISP_LX-1,DISP_LY-1},65535);
   }
 
 #endif
@@ -228,11 +309,11 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  clear(fb);
-  line_point_test(fb, 6);
+  clear();
+  fill_test();
   disp.update(fb);
-  disp.update(fb);
-
-
-  exit(0);
+  
+  
+  
+  while(1);
 }
