@@ -88,10 +88,10 @@
 // Macro
 // ----------------------------------------------------------------------------
 
-// #define PIN_PB_LEFT   2
-// #define PIN_PB_RIGHT  3
-// #define PIN_PB_UP     4
-// #define PIN_PB_DOWN   5
+#define PIN_PB_LEFT   2
+#define PIN_PB_RIGHT  3
+#define PIN_PB_UP     4
+#define PIN_PB_DOWN   5
 #define PIN_PB_ZI     6
 #define PIN_PB_ZO     7
 #define PIN_PB_CT     8
@@ -191,10 +191,10 @@
 // ----------------------------------------------------------------------------
 
 
-// Bounce pb_left = Bounce(PIN_PB_LEFT, DEBOUNCE_TIME);
-// Bounce pb_right = Bounce(PIN_PB_RIGHT, DEBOUNCE_TIME);
-// Bounce pb_up = Bounce(PIN_PB_UP, DEBOUNCE_TIME);
-// Bounce pb_down = Bounce(PIN_PB_DOWN, DEBOUNCE_TIME);
+Bounce pb_left = Bounce(PIN_PB_LEFT, DEBOUNCE_TIME);
+Bounce pb_right = Bounce(PIN_PB_RIGHT, DEBOUNCE_TIME);
+Bounce pb_up = Bounce(PIN_PB_UP, DEBOUNCE_TIME);
+Bounce pb_down = Bounce(PIN_PB_DOWN, DEBOUNCE_TIME);
 Bounce pb_zi = Bounce(PIN_PB_ZI, DEBOUNCE_TIME);
 Bounce pb_zo = Bounce(PIN_PB_ZO, DEBOUNCE_TIME);
 Bounce pb_ct = Bounce(PIN_PB_CT, DEBOUNCE_TIME);
@@ -848,6 +848,27 @@ void disp_wait() {
       map_top_bound += expand/2;
     }
   }
+
+  /*
+    shifts ui
+  */
+  void ui_shift_left() {
+    map_left_bound -= 0.25 * map_scale;
+    map_right_bound -= 0.25 * map_scale;
+  }
+  void ui_shift_right() {
+    map_left_bound += 0.25 * map_scale;
+    map_right_bound += 0.25 * map_scale;
+  }
+  void ui_shift_up() {
+    map_bottom_bound += 0.25 * map_scale;
+    map_top_bound += 0.25 * map_scale;
+  }
+  void ui_shift_down() {
+    map_bottom_bound -= 0.25 * map_scale;
+    map_top_bound -= 0.25 * map_scale;
+  }
+
 #endif
 
 
@@ -1076,16 +1097,16 @@ void setup() {
   disp_print("[DISP] Connected");
 #endif
 
-  // pinMode(PIN_PB_LEFT, INPUT_PULLUP);
-  // pinMode(PIN_PB_RIGHT, INPUT_PULLUP);
-  // pinMode(PIN_PB_UP, INPUT_PULLUP);
-  // pinMode(PIN_PB_DOWN, INPUT_PULLUP);
+  pinMode(PIN_PB_LEFT, INPUT_PULLUP);
+  pinMode(PIN_PB_RIGHT, INPUT_PULLUP);
+  pinMode(PIN_PB_UP, INPUT_PULLUP);
+  pinMode(PIN_PB_DOWN, INPUT_PULLUP);
   pinMode(PIN_PB_ZI, INPUT_PULLUP);
   pinMode(PIN_PB_ZO, INPUT_PULLUP);
   pinMode(PIN_PB_CT, INPUT_PULLUP);
   disp_print("[SYS] Push buttons active");
 
-  disp_print("[SYS] Run(L)/Replay(R)?");
+  disp_print("[SYS] Run(ZI)/Replay(ZO)?");
   while(1) {
     if(FAST_DEBUG) {
       break;
@@ -1138,7 +1159,26 @@ void setup() {
     }
 
   #if EN_GPS_MOD
-    if(!FAST_DEBUG) {
+    disp_print("[GPS] Wait fix? Yes(ZI)/No(ZO)?");
+    bool wait_for_fix = false;
+    while(1) {
+      if(FAST_DEBUG) {
+        break;
+      }
+      if(pb_zi.update()) {
+        if(pb_zi.fallingEdge()) {
+          wait_for_fix = true;
+          break;
+        }
+      }
+      if(pb_zo.update()) {
+        if(pb_zo.fallingEdge()) {
+          break;
+        }
+      }
+    }
+
+    if(!FAST_DEBUG && wait_for_fix) {
       gps_get_fix();
       delay(1000);
     }
@@ -1188,13 +1228,13 @@ void setup() {
           break;
         }
       }
-      if(pb_zi.update()) {
-        if(pb_zi.fallingEdge()) {
+      if(pb_down.update()) {
+        if(pb_down.fallingEdge()) {
           SEALEVELPRESSURE_HPA -= 0.1; 
         }
       }
-      if(pb_zo.update()) {
-        if(pb_zo.fallingEdge()) {
+      if(pb_up.update()) {
+        if(pb_up.fallingEdge()) {
           SEALEVELPRESSURE_HPA += 0.1;
         }
       }
@@ -1275,7 +1315,7 @@ void setup() {
   if(card_ready) {
     disp_wait();
     if(SD.exists(filename.c_str())) {
-      disp_print("[SD] Log file exists, a(L)/ow(R)?");
+      disp_print("[SD] Log file exists, a(ZI)/ow(ZO)?");
       bool overwrite;
       while(1) {
         if(replay_mode) {
@@ -1434,6 +1474,34 @@ void run() {
   if(pb_zo.update()) {
     if(pb_zo.fallingEdge()) {
       ui_scale(2);
+      redraw = true;
+    }
+  }
+
+  if(pb_left.update()) {
+    if(pb_left.fallingEdge()) {
+      ui_shift_left();
+      redraw = true;
+    }
+  }
+
+  if(pb_right.update()) {
+    if(pb_right.fallingEdge()) {
+      ui_shift_right();
+      redraw = true;
+    }
+  }
+
+  if(pb_up.update()) {
+    if(pb_up.fallingEdge()) {
+      ui_shift_up();
+      redraw = true;
+    }
+  }
+
+  if(pb_down.update()) {
+    if(pb_down.fallingEdge()) {
+      ui_shift_down();
       redraw = true;
     }
   }
